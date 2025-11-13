@@ -1,0 +1,84 @@
+# MATLAB/Simulink
+*.asv
+*.autosave
+*.bak
+*.mex*
+*.mlappinstall
+*.p
+*.sbr
+*.slx.part
+*.slxc
+*.dmp
+*.dot
+*.dot.old
+*.rsp
+*.tmw
+*.ilk
+*.pdb
+*.obj
+*.orig
+
+# MATLAB code coverage reports
+*.html
+*.xml
+
+# MATLAB generated C/C++ files
+*_ert_rtw/
+*_grt_rtw/
+*_sfun.c
+*_sfun.h
+*_sfun_info.mat
+*_sfun_registry.s
+*_sfun_rtw.c
+*_sfun_rtw.h
+*_sfun_rtw.mk
+*_sfun_tgtinfo.c
+*_sfun_tgtinfo.h
+*_sfun_tfc.c
+*_sfun_tfc.h
+*_ert_shrlib_rtw/
+
+# MATLAB figures
+*.fig
+
+# MATLAB data files
+# *.mat
+# *.mat.bak
+# *.mldatx
+# *.sldd
+
+# Simulink model cache
+*.slcache
+*.simulinkcompiler/
+
+# MATLAB project files
+resources/
+*.mlproj
+
+# Simulink report generator files
+*.rpt
+
+# Ignore all contents of the build directory
+build/
+
+# Ignore MEX-files
+*.mexa64
+*.mexmaci64
+*.mexw64
+*.mexw32
+*.mexa32
+*.mexmaci
+*.mexglx
+*.mexs64
+
+# Ignore Simulink code generation folders
+slprj/
+
+# Ignore MATLAB generated zip files
+*.zip
+
+# Ignore Simulink test harnesses
+*.sltest
+
+# Ignore MATLAB profile reports
+*.prf
