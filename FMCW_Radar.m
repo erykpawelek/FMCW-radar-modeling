@@ -49,7 +49,13 @@ else
     % title('Begining of transmition signal (Re)');
     % xlabel('Time (s)');
     % ylabel('Amplittude');
-    
+    freq_function = (fc + slope * t)/1e9;
+    figure;
+    plot(t, freq_function);
+    title('Frequency function of one chirp');
+    xlabel('Time (s)');
+    ylabel('Freq (GHz)');
+    grid on;
     % ---- Signal propagation and echo ----
 
     tau = (2 * target_range) / c; % This is our signal travel time (round-trip)
@@ -88,7 +94,7 @@ else
     plot(t(t_start:50000), real(signal_rx(t_start:50000)),'-r');
     xlabel('Time (s)');
     ylabel('Amplitude (Re)');
-    title('Reived signal');
+    title('Received signal');
     subplot(3,1,3);
     plot(t(t_start:50000), real(beat_signal(t_start:50000)),'-b');
     title('Beat signal');
