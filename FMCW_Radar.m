@@ -26,6 +26,7 @@ disp(['System parameters        ', 'value']);
 disp('------------------------------------');
 disp(['Carrier frequency :      ', num2str(fc/1e9), ' GHz']);
 disp(['Maximum target range:    ', num2str(max_range), ' m']);
+disp(['Measurement resolution:  ', num2str(range_resolution), ' m']);
 disp(['Maximum target velocity: ', num2str(max_velocity), ' km/h']);
 disp(['Chirp time :             ', num2str(t_sweep*1e6), ' us']);
 disp(['Bandwidth :              ', num2str(bandwidth_/1e9), ' GHz']);
@@ -159,12 +160,159 @@ overlap = 1000;
 nfft = 2048;
 % Spectrogram plotting 
 figure;
-[s, f, t_spec] = spectrogram(signal_tx, window_size, overlap, nfft, fs);    % Generating data for spectrogram drawin
-imagesc(t_spec * 1e6, f / 1e6, abs(s));                                     % Plotting spectrogram
-ylim([0, bandwidth_ / 1e6]);    
-set(gca, 'YDir', 'normal'); 
+[s, f, t_spec] = spectrogram(signal_tx, window_size, overlap, nfft, fs);    % Generating data for spectrogram plot
+s_db = 10 * log10((abs(s)).^2 +eps);                                        % Converting to db Power scale , we add eps, which is relly inrelevant
+                                                                            % positive number that allows to deal with log10(0) = -inf rule and by that we can scale our spectrogram properetly 
+imagesc(t_spec * 1e6, f / 1e6, s_db);                                       % Plotting spectrogram
+ylim([0, bandwidth_ / 1e6]);
+max_val = max(s_db(:));                                                     % Regulate renges of colorbar to get clear colour image
+clim([max_val - 60, max_val]); 
+set(gca, 'YDir', 'normal');                                                 % We rotate y axis to obtain growing in up direction
 colormap('jet');
-colorbar;
+c = colorbar;
+c.Label.String = 'Power (dB)';
 title('Spetrogram of transmitted signal (TX Chirp)');
 xlabel('Time (us)');
 ylabel('Frequency (MHz)');
+
+%% 
+%   #### PART 2 REALIZATION USING PHASED ARRAY SYSTEM TOOLBOX ####
+
+clc;
+clear all;
+
+c = 299792458;  % Light speed const in m/s
+fc = 77e9;      % Carrier frequency (77 GHz - standard for automotive radars)
+lambda = c/fc;  % Wavelength 
+
+% ---- Project requirements -----
+
+max_range = 200;                                % Maximal range in meters
+t_sweep = 5.5 * range2time(max_range, c);       % Duration of 1 chirp 
+range_resolution = 0.5;                         % Minimal distinguishable difference in distance in meters
+bandwidth_ = rangeres2bw(range_resolution, c);  % Bandwidth of our signal 
+slope = bandwidth_/t_sweep;                     % Frequency slope of chirp
+fr_max = range2beat(max_range,slope,c);   % Obtaining max freq component of beat signal colerated to distance
+max_velocity = 150*1000/3600;                   % Max velocity in meters per second
+fd_max = speed2dop(2*max_velocity,lambda);      % Obtaining max freq component of beat signal colerated to speed
+fb_max = fr_max+fd_max;                         % Maximum beat signal freq containing distance component as well as velocity component
+
+
+% ---- HINT ---- 
+%{ 
+Because an FMCW signal often occupies a large bandwidth, setting the sample rate blindly to twice the bandwidth often 
+stresses the capability of A/D converter hardware. To address this issue, you can often choose a lower sample rate.
+Consider two things here:
+
+* For a complex sampled signal, the sample rate can be set to the same as the bandwidth.
+* FMCW radars estimate the target range using the beat frequency embedded in the dechirped signal. 
+   The maximum beat frequency the radar needs to detect is the sum of the beat frequency corresponding to the
+   maximum range and the maximum Doppler frequency. Hence, the sample rate only needs to be twice the maximum beat frequency.
+%}
+
+fs = max(2*fb_max, bandwidth_); % Securing sample time to meet sapling requirement
+
+%{
+ For our simulation purpuses we use bandwidth sampling frequency becausewe want to 
+ generate our tx_signal. In real radar decoding rx is proceeded in analog
+ mixer so we anly need sufficient sampling freq to decode beat signal.
+%}
+
+waveform = phased.FMCWWaveform('SweepTime',t_sweep, ...
+    'SweepBandwidth',bandwidth_, ...
+    'SampleRate',fs, ...
+    'SweepInterval', 'Positive');
+
+signal_tx = waveform();
+subplot(211); plot(0:1/fs:t_sweep-1/fs,real(signal_tx));
+xlabel('Time (s)'); ylabel('Amplitude (v)');
+title('FMCW signal (aliasing)'); axis tight;
+subplot(212); spectrogram(signal_tx,32,16,32,fs,'yaxis');
+title('FMCW signal spectrogram');
+
+% ---- Target definition ---- 
+
+target_range = 100;
+target_speed = -96*1000/3600;
+car_rcs = db2pow(min(10*log10(target_range)+5,20));      % Simulation of changing size of our target based on a distance  
+
+target = phased.RadarTarget( ...                           % Definition of our target system object from electromagnetic side 
+    'MeanRCS',car_rcs, ...
+    'PropagationSpeed',c,...
+    'OperatingFrequency',fc);
+
+target_motion = phased.Platform( ...                       % Definition another system object which describes movement of a target
+    'InitialPosition',[target_range;0;0.5],...
+    'Velocity',[target_speed;0;0]);
+
+channel = phased.FreeSpace( ...                            % Definition of another system object which describes wave propagation model
+    'PropagationSpeed',c,...
+    'OperatingFrequency',fc, ...
+    'SampleRate',fs, ...
+    'TwoWayPropagation',true);
+
+% Hardware config
+ant_aperture = 6.06e-4;                         % in square meter
+ant_gain = aperture2gain(ant_aperture,lambda);  % in dB
+
+tx_ppower = db2pow(5)*1e-3;                     % in watts
+tx_gain = 9+ant_gain;                           % in dB
+
+rx_gain = 15+ant_gain;                          % in dB
+rx_nf = 4.5;                                    % in dB
+
+% Definition of transmiter and receiver system objects
+transmitter = phased.Transmitter('PeakPower',tx_ppower,'Gain',tx_gain);
+receiver = phased.ReceiverPreamp('Gain',rx_gain,'NoiseFigure',rx_nf,'SampleRate',fs);
+
+% Definition of transmitter movement system object
+radar_speed = 10*1000/3600;
+radar_motion = phased.Platform('InitialPosition',[0;0;0.5],...
+    'Velocity',[radar_speed;0;0]);
+% Configuration of spectrum analizer, we chec if our signal didn't got lost
+% in noise
+specanalyzer = spectrumAnalyzer('SampleRate',fs, ...
+    'Method','welch','AveragingMethod','running', ...
+    'PlotAsTwoSidedSpectrum',true, 'FrequencyResolutionMethod','rbw', ...
+    'Title','Spectrum for received and dechirped signal', ...
+    'ShowLegend',true, ...
+    'ChannelNames', {'Transmitted Signal', 'Dechirped (Beat) Signal'});
+
+
+rng(2012);                  % Defining randomnes to be the same in every program run
+Nsweep = 64;                % Numer of chirps for measurment
+xr = complex(zeros(waveform.SampleRate*waveform.SweepTime,Nsweep)); % Data storage 2D matrix, 
+
+for m = 1:Nsweep
+    % Update radar and target positions
+    [radar_pos,radar_vel] = radar_motion(waveform.SweepTime);
+    [tgt_pos,tgt_vel] = target_motion(waveform.SweepTime);
+
+    % Transmit FMCW waveform
+    sig = waveform();
+    txsig = transmitter(sig);
+
+    % Propagate the signal and reflect off the target
+    txsig = channel(txsig,radar_pos,tgt_pos,radar_vel,tgt_vel);
+    txsig = target(txsig);
+
+    % Dechirp the received radar return
+    txsig = receiver(txsig);
+    dechirpsig = dechirp(txsig,sig);
+
+    % Visualize the spectrum
+    specanalyzer([txsig dechirpsig]);
+    % Data collection
+    xr(:,m) = dechirpsig;
+end
+
+rngdopresp = phased.RangeDopplerResponse('PropagationSpeed',c,...
+    'DopplerOutput','Speed','OperatingFrequency',fc,'SampleRate',fs,...
+    'RangeMethod','FFT','SweepSlope',slope,...
+    'RangeFFTLengthSource','Property','RangeFFTLength',2048,...
+    'DopplerFFTLengthSource','Property','DopplerFFTLength',256);
+
+clf;
+plotResponse(rngdopresp,xr);                     % Plot range Doppler map
+axis([-max_velocity max_velocity 0 max_range]);
+title('Range-Doppler Map');
