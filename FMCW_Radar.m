@@ -192,7 +192,7 @@ t_sweep = 5.5 * range2time(max_range, c);       % Duration of 1 chirp
 range_resolution = 0.5;                         % Minimal distinguishable difference in distance in meters
 bandwidth_ = rangeres2bw(range_resolution, c);  % Bandwidth of our signal 
 slope = bandwidth_/t_sweep;                     % Frequency slope of chirp
-fr_max = range2beat(max_range,slope,c);   % Obtaining max freq component of beat signal colerated to distance
+fr_max = range2beat(max_range,slope,c);         % Obtaining max freq component of beat signal colerated to distance
 max_velocity = 150*1000/3600;                   % Max velocity in meters per second
 fd_max = speed2dop(2*max_velocity,lambda);      % Obtaining max freq component of beat signal colerated to speed
 fb_max = fr_max+fd_max;                         % Maximum beat signal freq containing distance component as well as velocity component
@@ -223,6 +223,7 @@ waveform = phased.FMCWWaveform('SweepTime',t_sweep, ...
     'SampleRate',fs, ...
     'SweepInterval', 'Positive');
 
+figure(1);
 signal_tx = waveform();
 subplot(211); plot(0:1/fs:t_sweep-1/fs,real(signal_tx));
 xlabel('Time (s)'); ylabel('Amplitude (v)');
@@ -313,6 +314,7 @@ rngdopresp = phased.RangeDopplerResponse('PropagationSpeed',c,...
     'DopplerFFTLengthSource','Property','DopplerFFTLength',256);
 
 clf;
+figure(2);
 plotResponse(rngdopresp,xr);                     % Plot range Doppler map
 axis([-max_velocity max_velocity 0 max_range]);
 title('Range-Doppler Map');
